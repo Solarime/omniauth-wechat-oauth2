@@ -27,7 +27,7 @@ describe OmniAuth::Strategies::Wechat do
     end
 
     specify 'has authorize_url' do
-      expect(subject.client.options[:authorize_url]).to eq('https://open.weixin.qq.com/connect/oauth2/authorize#wechat_redirect')
+      expect(subject.client.options[:authorize_url]).to eq('https://open.weixin.qq.com/connect/qrconnect#wechat_redirect')
     end
 
     specify 'has token_url' do
@@ -37,7 +37,7 @@ describe OmniAuth::Strategies::Wechat do
 
   describe "#authorize_params" do
     specify "default scope is snsapi_userinfo" do
-      expect(subject.authorize_params[:scope]).to eq("snsapi_userinfo")
+      expect(subject.authorize_params[:scope]).to eq("snsapi_login")
     end
   end
 
@@ -60,18 +60,21 @@ describe OmniAuth::Strategies::Wechat do
       callback_url = "http://exammple.com/callback"
 
       subject.stub(:callback_url=>callback_url)
-      subject.should_receive(:redirect).with do |redirect_url|
-        uri = URI.parse(redirect_url)
+      subject.should_receive(:redirect).with(valid_redirect_url(callback_url))
+      subject.request_phase
+    end
+  end
+
+  def valid_redirect_url(callback_url)
+    satisfy do |actual_redirect_url|
+        uri = URI.parse(actual_redirect_url)
         expect(uri.fragment).to eq("wechat_redirect")
         params = CGI::parse(uri.query)
         expect(params["appid"]).to eq(['appid'])
         expect(params["redirect_uri"]).to eq([callback_url])
         expect(params["response_type"]).to eq(['code'])
-        expect(params["scope"]).to eq(['snsapi_userinfo'])
+        expect(params["scope"]).to eq(['snsapi_login'])
         expect(params["state"]).to eq([subject.session['omniauth.state']])
-      end
-
-      subject.request_phase
     end
   end
 
@@ -106,6 +109,8 @@ describe OmniAuth::Strategies::Wechat do
       end
     end
 
+  def valid_request_arguments()
+  end
     context "when scope is snsapi_userinfo" do
       let(:access_token) { OAuth2::AccessToken.from_hash(client, {
         "openid"=>"openid", 
@@ -127,20 +132,17 @@ describe OmniAuth::Strategies::Wechat do
           "privilege" => ["PRIVILEGE1", "PRIVILEGE2"]
         }
 
-        client.should_receive(:request).with do |verb, path, opts|
+        expect(client).to receive(:request).with { |verb, path, opts|
           expect(verb).to eq(:get)
           expect(path).to eq("/sns/userinfo")
           expect(opts[:params]).to eq("openid"=> "openid", "access_token"=> "access_token")
           expect(opts[:parse]).to eq(:text)
-        end.and_return(double("response", body: response_body))
-
+        }.and_return(double("response", body: response_body))
         expect(subject.raw_info).to eq(response_hash)
       end
 
     end
 
   end
-
-
 
 end
